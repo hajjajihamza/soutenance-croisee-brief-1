@@ -1,9 +1,7 @@
-"""Application Streamlit du projet Mental Health Risk Prediction.
-
-Lancer à la racine du projet : uv run streamlit run app.py
-Dépend des fichiers src/ et des sorties produites par le DAG Airflow.
 """
-from pathlib import Path
+Application Streamlit
+Lancer à la racine du projet : PYTHONPATH=. uv run streamlit run app.py
+"""
 import json
 
 import joblib
@@ -12,18 +10,10 @@ import pandas as pd
 import streamlit as st
 from sklearn.metrics import ConfusionMatrixDisplay
 
-from src.config import (
-    NUMERIC_COLS, NOMINAL_COLS, ORDINAL_COLS,
-    ORDINAL_CATEGORIES, OTHER_NOMINAL_COLS,
-)
+from src.config import (PROJECT_DIR, MODEL_PATH, DATA_PATH, NUMERIC_COLS, NOMINAL_COLS, ORDINAL_COLS, ORDINAL_CATEGORIES, OTHER_NOMINAL_COLS)
 from src.persistence import load_model
 
-
-ROOT = Path(__file__).resolve().parent.parent
-
-MODEL_PATH = ROOT / "models" / "mental_health_pipeline.joblib"
-DATA_PATH = ROOT / "data" / "row.csv"
-ARTIFACTS_DIR = ROOT / "artifacts"
+ARTIFACTS_DIR = PROJECT_DIR / "artifacts"
 
 st.set_page_config(page_title="Mental Health Risk", page_icon="🎓", layout="wide")
 st.title("🎓 Mental Health Risk Prediction")
@@ -46,13 +36,14 @@ def latest_report():
     reports = list(ARTIFACTS_DIR.glob("*/metrics.json"))
     if not reports:
         return None
-    return max(reports, key=lambda p: p.stat().st_mtime)
+    return max(reports, key=lambda p: p.parent.name)
 
 
 def categorical_choices(column, df):
     """Valeurs trouvées dans le CSV, sinon valeurs par défaut."""
     if column in ORDINAL_COLS:
         return ORDINAL_CATEGORIES[ORDINAL_COLS.index(column)]
+
     if df is not None and column in df.columns:
         vals = df[column].dropna().unique().tolist()
         if vals:
@@ -61,7 +52,7 @@ def categorical_choices(column, df):
         "Gender": ["Male", "Female"],
         "Part_Time_Job": ["Yes", "No"],
         "Previous_Mental_Health_History": ["Yes", "No"],
-        "Year_of_Study": ["1st Year", "2nd Year", "3rd Year", "4th Year"],
+        "Year_of_Study": ["1st Year", "2nd Year", "3rd Year", "4th Year", "5th Year"],
     }
     return defaults.get(column, ["Unknown"])
 
@@ -86,8 +77,7 @@ def numeric_input(column, df):
             low = min(low, float(values.min()))
             high = max(high, float(values.max()))
             value = float(values.median())
-    return st.number_input(column, min_value=float(low), max_value=float(high),
-                           value=float(max(low, min(value, high))), step=0.5)
+    return st.number_input(column, min_value=float(low), max_value=float(high), value=float(max(low, min(value, high))), step=0.5)
 
 
 # Charger les ressources facultatives
@@ -109,7 +99,7 @@ except Exception as exc:
     st.stop()
 
 st.sidebar.success("Modèle chargé")
-st.sidebar.caption(str(MODEL_PATH.relative_to(ROOT)))
+st.sidebar.caption(str(MODEL_PATH.relative_to(PROJECT_DIR)))
 st.sidebar.info("Le modèle et les rapports doivent provenir d'une source fiable.")
 
 metrics_tab, predict_tab = st.tabs(["📊 Résultats du modèle", "🔮 Tester une prédiction"])
@@ -117,12 +107,13 @@ metrics_tab, predict_tab = st.tabs(["📊 Résultats du modèle", "🔮 Tester u
 with metrics_tab:
     st.subheader("Résultats du dernier entraînement Airflow")
     report_file = latest_report()
+    # print(report_file)
     if report_file is None:
         st.info("Pas encore de rapport metrics.json. Exécute le DAG Airflow.")
     else:
         try:
             report = json.loads(report_file.read_text(encoding="utf-8"))
-            st.caption(f"Rapport : {report_file.relative_to(ROOT)}")
+            st.caption(f"Rapport : {report_file.relative_to(PROJECT_DIR)}")
             cols = st.columns(4)
             for widget, key in zip(cols, ["Accuracy", "Precision", "Recall", "F1-score"]):
                 value = report.get(key)
@@ -135,7 +126,7 @@ with metrics_tab:
         # La matrice utilise le candidat et le split du même run.
         run_dir = report_file.parent
         split_file = run_dir / "split.joblib"
-        candidate_file = run_dir / "candidate.joblib"
+        candidate_file = run_dir / "best_model.joblib"
         if split_file.exists() and candidate_file.exists():
             st.subheader("Matrice de confusion du run")
             try:

@@ -1,4 +1,13 @@
-# === Configuration partagée par toutes les étapes ===
+"""
+Configuration partagée par toutes les étapes
+"""
+from pathlib import Path
+
+PROJECT_DIR = Path(__file__).resolve().parents[1]
+
+DATA_PATH = PROJECT_DIR / "data" / "row.csv"
+
+MODEL_PATH = PROJECT_DIR / "models" / "mental_health_pipeline.joblib"
 
 RANDOM_STATE = 26
 
